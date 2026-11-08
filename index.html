@@ -1,0 +1,467 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Money Master</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600&family=Inter:wght@400;600;800&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/d3/7.9.0/d3.min.js"></script>
+<script>document.write('<script src="data.js?t='+Date.now()+'"><\/script>')</script>
+<style>
+:root{
+  --bg:#07090f; --panel:#0d111b; --line:#1c2333; --ink:#d9e1f2; --dim:#7a869e;
+  --co:#2ee6c5; --hold:#8f6bff; --big3:#ff4d8d; --sell:#ff5c5c; --buy:#39d98a; --person:#ffc94d;
+  --mono:'JetBrains Mono',monospace; --sans:'Inter',system-ui,sans-serif;
+}
+*{box-sizing:border-box}
+html,body{margin:0;height:100%;background:var(--bg);color:var(--ink);font-family:var(--sans)}
+body{display:grid;grid-template-rows:auto 1fr;overflow:hidden}
+header{display:flex;align-items:center;gap:24px;padding:12px 20px;border-bottom:1px solid var(--line);flex-wrap:wrap}
+h1{margin:0;font-size:20px;font-weight:800;letter-spacing:.06em;text-transform:uppercase}
+h1 span{color:var(--co)}
+.stat{font-family:var(--mono);font-size:12px;color:var(--dim)}
+.stat b{display:block;font-size:18px;color:var(--ink)}
+.stat b.pink{color:var(--big3)} .stat b.red{color:var(--sell)} .stat b.green{color:var(--buy)}
+.ctl{margin-left:auto;display:flex;flex-wrap:wrap;gap:12px;align-items:center;font-size:12px;color:var(--dim)}
+.ctl select,.ctl input{background:var(--panel);color:var(--ink);border:1px solid var(--line);border-radius:6px;padding:4px 6px;font-family:var(--mono)}
+.tabs{display:flex;gap:4px}
+.tabs button{background:var(--panel);color:var(--dim);border:1px solid var(--line);padding:6px 12px;border-radius:6px;cursor:pointer;font-family:var(--mono);font-size:12px}
+.tabs button.on{color:var(--bg);background:var(--co);border-color:var(--co)}
+main{display:grid;grid-template-columns:1fr 440px;min-height:0}
+#stage{position:relative;min-height:0;overflow:hidden}
+svg{width:100%;height:100%;display:block}
+aside{border-left:1px solid var(--line);background:var(--panel);overflow:auto;padding:16px 18px}
+aside h2{margin:0 0 2px;font-size:22px}
+aside h3{margin:20px 0 8px;font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:var(--dim)}
+.sub{font-family:var(--mono);font-size:12px;color:var(--dim)}
+table{width:100%;border-collapse:collapse;font-family:var(--mono);font-size:11.5px}
+th{text-align:right;color:var(--dim);font-weight:400;padding:4px 4px;border-bottom:1px solid var(--line)}
+td{text-align:right;padding:4px 4px;border-bottom:1px solid #141a27;white-space:nowrap}
+th:first-child,td:first-child{text-align:left;white-space:normal}
+tr.hot td{background:rgba(255,92,92,.10)}
+tr.b3 td:first-child{color:var(--big3)}
+tr.click{cursor:pointer} tr.click:hover td{background:#141b2a}
+.bar{height:6px;border-radius:3px;background:var(--hold);display:inline-block;vertical-align:middle}
+.neg{color:var(--sell)} .pos{color:var(--buy)}
+#tip{position:absolute;pointer-events:none;background:#0b0f18ee;border:1px solid var(--line);border-radius:8px;padding:8px 10px;font-family:var(--mono);font-size:11px;max-width:280px;opacity:0;transition:opacity .12s}
+.legend{position:absolute;left:14px;bottom:12px;font-family:var(--mono);font-size:11px;color:var(--dim);display:flex;gap:14px}
+.dot{display:inline-block;width:9px;height:9px;border-radius:50%;margin-right:5px;vertical-align:-1px}
+.hint{position:absolute;right:14px;top:10px;font-family:var(--mono);font-size:11px;color:var(--dim)}
+.spark{display:block;width:100%;height:70px}
+.note{font-size:11px;color:var(--dim);line-height:1.5;margin-top:14px}
+@media (max-width:900px){main{grid-template-columns:1fr;grid-template-rows:55vh auto}body{overflow:auto}aside{border-left:0;border-top:1px solid var(--line)}}
+.btn{background:var(--panel);color:var(--ink);border:1px solid var(--line);padding:6px 12px;border-radius:6px;cursor:pointer;font-family:var(--mono);font-size:12px}
+.btn:hover:not([disabled]){border-color:var(--co);color:var(--co)}
+.btn[disabled]{opacity:.35;cursor:default}
+.nav{display:flex;gap:6px;align-items:center;margin:-4px 0 14px;position:sticky;top:-16px;background:var(--panel);padding:8px 0;z-index:2;border-bottom:1px solid var(--line)}
+.crumb{font-family:var(--mono);font-size:10.5px;color:var(--dim);margin-left:6px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+td.pp{color:var(--person)} td.tk{color:var(--co)}
+a.ext{color:var(--co);font-family:var(--mono);font-size:12px}
+.ctl label{display:flex;align-items:center;gap:4px}
+</style>
+</head>
+<body>
+<header>
+  <h1>Money<span>·</span>Master</h1>
+  <div class="stat"><b id="sCos">–</b>companies</div>
+  <div class="stat"><b id="sHold">–</b>holders shown</div>
+  <div class="stat"><b class="pink" id="sBig3">–</b>avg Big-3 stake</div>
+  <div class="stat"><b class="red" id="sSells">–</b>insider sells (18 mo)</div>
+  <div class="stat"><b class="green" id="sBuys">–</b>insider buys (18 mo)</div>
+  <div class="ctl">
+    <button id="reset" class="btn" title="Clear the selection, reset zoom, show the overview (Esc)">⟲ Reset</button>
+    <div class="tabs"><button data-v="net" class="on">Web</button><button data-v="big3">Big 3</button><button data-v="people">People</button><button data-v="sells">Insider sells</button><button data-v="buys">Insider buys</button></div>
+    <input id="find" list="findList" placeholder="find ticker, fund, insider…" autocomplete="off" style="width:190px"><datalist id="findList"></datalist>
+    <select id="idx" title="Which index"><option value="all">NQ100 + S&amp;P 500</option><option value="NDX">Nasdaq-100</option><option value="SP500">S&amp;P 500</option></select>
+    <label title="Biggest companies by market cap in the web">web: top <input id="topN" type="number" min="5" max="600" value="40" style="width:52px"></label>
+    <label>holder in ≥ <input id="minDeg" type="number" min="1" max="600" value="4" style="width:46px"> cos</label>
+    <label><input id="showPeople" type="checkbox"> insiders in web</label>
+  </div>
+</header>
+<main>
+  <div id="stage"><svg id="svg"></svg><div id="tip"></div>
+    <div class="legend"><span><i class="dot" style="background:var(--co)"></i>company</span><span><i class="dot" style="background:var(--hold)"></i>holder</span><span><i class="dot" style="background:var(--big3)"></i>Big 3</span><span><i class="dot" style="background:var(--person)"></i>insider</span><span><i class="dot" style="background:var(--sell)"></i>red ring = insider selling</span><span><i class="dot" style="background:var(--buy)"></i>green ring = insider buying</span></div>
+    <div class="hint">drag · scroll to zoom · click a node · click empty space or Esc to reset</div>
+  </div>
+  <aside id="side"></aside>
+</main>
+<script>
+const D = window.MM_DATA;
+const BIG3 = new Set(["Vanguard Group","BlackRock","State Street"]);
+const $ = s => document.querySelector(s);
+const enc = encodeURIComponent, dec = decodeURIComponent;
+const fm = v => { const a=Math.abs(v); return (v<0?"-":"")+"$"+(a>=1e12?(a/1e12).toFixed(2)+"T":a>=1e9?(a/1e9).toFixed(1)+"B":a>=1e6?(a/1e6).toFixed(1)+"M":a>=1e3?(a/1e3).toFixed(0)+"K":a.toFixed(0)); };
+const fn = v => { const a=Math.abs(v); return a>=1e9?(v/1e9).toFixed(2)+"B":a>=1e6?(v/1e6).toFixed(2)+"M":a>=1e3?(v/1e3).toFixed(1)+"K":v.toFixed(0); };
+const pc = v => v>=0.01||v===0 ? v.toFixed(2)+"%" : v.toFixed(4)+"%";
+const CO = new Map(D.companies.map(c=>[c.ticker,c]));
+
+// ---- model: institutions, grouped by family name per company
+D.companies.forEach(c => {
+  const g = new Map();
+  c.holders.forEach(h => {
+    const o = g.get(h.name) || {name:h.name, shares:0, value:0, pct:0, chg:0, known:true, entities:[]};
+    o.shares+=h.shares; o.value+=h.value; o.pct+=h.pct; o.chg+=h.chg; o.known = o.known && h.chgKnown!==false; o.entities.push(h.raw);
+    g.set(h.name,o);
+  });
+  c.groups = [...g.values()].sort((a,b)=>b.value-a.value);
+  c.sellVal = d3.sum(c.trades.filter(t=>t.kind==="sell"), t=>t.value);
+  c.buyVal  = d3.sum(c.trades.filter(t=>t.kind==="buy"), t=>t.value);
+  c.big3 = d3.sum(c.groups.filter(g=>BIG3.has(g.name)), g=>g.pct);
+});
+const holders = new Map();
+D.companies.forEach(c => c.groups.forEach(g => {
+  const h = holders.get(g.name) || {name:g.name, value:0, stakes:[]};
+  h.value += g.value; h.stakes.push({t:c.ticker, pct:g.pct, value:g.value, chg:g.chg, known:g.known});
+  holders.set(g.name,h);
+}));
+
+// ---- model: people. fetch.py gives c.ins: the "Shares Held" on each person's
+// latest Form 4 row at the company, per owner type (d = Direct, i = Indirect).
+// c.trades holds only the open-market buys and sells.
+const people = new Map();
+D.companies.forEach(c => {
+  const byIns = d3.group(c.trades, t=>t.insider);
+  c.rel = new Map(c.ins.map(x=>[x.n, x.rel]));
+  c.ins.forEach(x => {
+    const ts = byIns.get(x.n) || [], held = x.d + x.i;
+    const p = people.get(x.n) || {name:x.n, value:0, sold:0, bought:0, pos:[], url:x.url, also:[]};
+    if(x.also) p.also.push(...x.also);
+    const sold = d3.sum(ts.filter(t=>t.kind==="sell"), t=>t.value), bought = d3.sum(ts.filter(t=>t.kind==="buy"), t=>t.value);
+    p.pos.push({t:c.ticker, rel:x.rel, held, value:held*c.price, pct:c.sharesOut?100*held/c.sharesOut:0,
+                direct:x.d, indirect:x.i, sold, bought, last:x.last, trades:ts});
+    p.value += held*c.price; p.sold += sold; p.bought += bought;
+    people.set(x.n, p);
+  });
+});
+people.forEach(p => p.pos.sort((a,b)=>b.value-a.value));
+const peopleByVal = [...people.values()].sort((a,b)=>b.value-a.value);
+
+// ---- index filter: "all", "NDX" or "SP500". Tickers pulled by hand have no index tag.
+let IDX = "all";
+const inIdx = t => { const c = CO.get(t); return IDX==="all" || !c.idx || !c.idx.length || c.idx.includes(IDX); };
+const COS = () => D.companies.filter(c=>inIdx(c.ticker));          // sorted by mkt cap in fetch.py
+const posIn = p => p.pos.filter(x=>inIdx(x.t));
+function stats(){
+  const cs = COS();
+  $("#sCos").textContent = cs.length;
+  $("#sBig3").textContent = pc(d3.mean(cs, c=>c.big3));
+  $("#sSells").textContent = fm(d3.sum(cs, c=>c.sellVal));
+  $("#sBuys").textContent = fm(d3.sum(cs, c=>c.buyVal));
+}
+stats();
+
+// ---- search: ticker, company name, institution or insider
+const FIND = new Map();
+D.companies.forEach(c=>FIND.set(`${c.ticker} · ${c.name}`, ["company", c.ticker]));
+holders.forEach(h=>FIND.set(`${h.name} · institution`, ["holder", h.name]));
+peopleByVal.forEach(p=>FIND.set(`${p.name} · insider`, ["person", p.name]));
+$("#findList").innerHTML = [...FIND.keys()].map(k=>`<option value="${k.replace(/"/g,"&quot;")}">`).join("");
+// Jump only on a picked list item or on Enter. A partial ticker ("MET" on the way to "META") must not jump.
+function findGo(hit){ if(!hit) return; go(...hit); $("#find").value = ""; $("#find").blur(); }
+$("#find").addEventListener("input", e=>{ if(!e.inputType || e.inputType==="insertReplacementText") findGo(FIND.get(e.target.value)); });
+$("#find").addEventListener("keydown", e=>{
+  if(e.key!=="Enter") return;
+  const v = e.target.value.trim(), u = v.toUpperCase(), lo = v.toLowerCase();
+  const key = [...FIND.keys()].find(k=>k.toLowerCase().startsWith(lo)) || [...FIND.keys()].find(k=>k.toLowerCase().includes(lo));
+  findGo(FIND.get(v) || (CO.has(u) ? ["company", u] : null) || (key && FIND.get(key)));
+});
+
+// ---- side panel with history
+let hist = [], cur = {kind:"overview"};
+const PANELS = {overview:panelOverview, company:panelCompany, holder:panelHolder, person:panelPerson};
+function go(kind, arg, push=true){
+  if(push && !(cur.kind===kind && cur.arg===arg)) hist.push(cur);
+  cur = {kind, arg}; render();
+}
+function back(){ if(hist.length){ cur = hist.pop(); render(); } }
+function home(){ hist = []; cur = {kind:"overview"}; render(); resetZoom(); }
+function render(){
+  const nav = `<div class="nav"><button class="btn" id="bBack" ${hist.length?"":"disabled"}>← Back</button><button class="btn" id="bHome" ${cur.kind==="overview"?"disabled":""}>⌂ Overview</button><span class="crumb">${crumb()}</span></div>`;
+  $("#side").innerHTML = nav + PANELS[cur.kind](cur.arg);
+  $("#side").scrollTop = 0;
+  $("#bBack").onclick = back; $("#bHome").onclick = home;
+  $("#side").querySelectorAll("[data-t]").forEach(e=>e.onclick=()=>go("company", e.dataset.t));
+  $("#side").querySelectorAll("[data-h]").forEach(e=>e.onclick=()=>go("holder", dec(e.dataset.h)));
+  $("#side").querySelectorAll("[data-p]").forEach(e=>e.onclick=()=>go("person", dec(e.dataset.p)));
+  focusNode(cur.kind==="company"?"c:"+cur.arg : cur.kind==="holder"?"h:"+cur.arg : cur.kind==="person"?"p:"+cur.arg : null);
+}
+function crumb(){ return [...hist.slice(-2), cur].map(s=>s.kind==="overview"?"overview":s.arg).join(" › "); }
+
+const relOf = p => [...new Set(p.pos.map(x=>`${x.rel} · ${x.t}`))].join(", ");
+function panelOverview(){
+  const hs = [...holders.values()].sort((a,b)=>b.value-a.value).slice(0,10);
+  const sellers = peopleByVal.filter(p=>p.sold>0).sort((a,b)=>b.sold-a.sold).slice(0,6);
+  const buyers = peopleByVal.filter(p=>p.bought>0).sort((a,b)=>b.bought-a.bought).slice(0,6);
+  const links = peopleByVal.filter(p=>p.pos.length>1).sort((a,b)=>b.pos.length-a.pos.length||b.value-a.value);
+  return `
+  <h2>Overview</h2>
+  <div class="sub">${COS().length} companies${IDX==="all"?"":" in the "+(IDX==="NDX"?"Nasdaq-100":"S&P 500")} · ${holders.size} institutions · ${people.size} insiders · pulled ${D.asOf}</div>
+  <h3>Biggest institutions (across all ${D.companies.length})</h3>
+  <table><tr><th>Holder</th><th>Cos</th><th>Value</th></tr>
+  ${hs.map(h=>`<tr class="click ${BIG3.has(h.name)?"b3":""}" data-h="${enc(h.name)}"><td>${h.name}</td><td>${h.stakes.length}</td><td>${fm(h.value)}</td></tr>`).join("")}</table>
+  <h3>Biggest insider stakes</h3>
+  <table><tr><th>Insider</th><th>Where</th><th>Value</th></tr>
+  ${peopleByVal.slice(0,10).map(p=>`<tr class="click" data-p="${enc(p.name)}"><td class="pp">${p.name}</td><td class="tk">${p.pos.map(x=>x.t).join(" ")}</td><td>${fm(p.value)}</td></tr>`).join("")}</table>
+  <h3>Biggest sellers · 18 mo</h3>
+  <table>${sellers.map(p=>`<tr class="click" data-p="${enc(p.name)}"><td class="pp">${p.name}</td><td class="tk">${p.pos.filter(x=>x.sold).map(x=>x.t).join(" ")}</td><td class="neg">${fm(p.sold)}</td></tr>`).join("")}</table>
+  <h3>Biggest buyers · 18 mo</h3>
+  <table>${buyers.map(p=>`<tr class="click" data-p="${enc(p.name)}"><td class="pp">${p.name}</td><td class="tk">${p.pos.filter(x=>x.bought).map(x=>x.t).join(" ")}</td><td class="pos">${fm(p.bought)}</td></tr>`).join("")}</table>
+  <h3>Board links — ${links.length} insiders at 2+ tracked companies${links.length>40?" (top 40)":""}</h3>
+  ${links.length?`<table>${links.slice(0,40).map(p=>`<tr class="click" data-p="${enc(p.name)}"><td class="pp">${p.name}</td><td class="tk">${p.pos.map(x=>x.t).join(" + ")}</td><td>${fm(p.value)}</td></tr>`).join("")}</table>`:"<div class='sub'>None.</div>"}
+  <h3>Biggest ${COS().length>100?"100 of "+COS().length+" ":""}companies <span class="sub">· use the find box for the rest</span></h3>
+  <table><tr><th>Ticker</th><th>Mkt cap</th><th>Big 3</th><th>Sold</th><th>Bought</th></tr>
+  ${COS().slice(0,100).map(c=>`<tr class="click" data-t="${c.ticker}"><td class="tk">${c.ticker}</td><td>${fm(c.mktCap)}</td><td>${pc(c.big3)}</td><td class="neg">${c.sellVal?fm(c.sellVal):"–"}</td><td class="pos">${c.buyVal?fm(c.buyVal):"–"}</td></tr>`).join("")}</table>
+  <div class="note">Source: SEC EDGAR — Form 13F (institutions, filed up to 45 days after each quarter) and Form 4 (insiders, filed within 2 business days of a trade). Share counts: SEC XBRL (Yahoo for a few share classes). Prices: last close (Yahoo). Not investment advice.</div>`;
+}
+
+function insiderPivot(c){
+  return d3.rollups(c.trades.filter(t=>t.kind!=="other"), v=>({
+    n:v.length, rel:c.rel.get(v[0].insider)||"",
+    sold:d3.sum(v.filter(t=>t.kind==="sell"),t=>t.shares), soldV:d3.sum(v.filter(t=>t.kind==="sell"),t=>t.value),
+    bought:d3.sum(v.filter(t=>t.kind==="buy"),t=>t.value), last:d3.max(v,t=>t.date)}), t=>t.insider)
+    .sort((a,b)=>(b[1].soldV-b[1].bought)-(a[1].soldV-a[1].bought));
+}
+function spark(trades, kind="sell"){
+  const s = trades.filter(t=>t.kind===kind && t.value>0), colr = kind==="sell"?"var(--sell)":"var(--buy)";
+  if(!s.length) return `<div class='sub'>No open-market ${kind}s in the window.</div>`;
+  const months = d3.rollups(s, v=>d3.sum(v,t=>t.value), t=>t.date.slice(0,7)).sort((a,b)=>a[0]<b[0]?-1:1);
+  const W=400,H=70, x=d3.scaleBand(months.map(m=>m[0]),[0,W]).padding(.2), y=d3.scaleLinear([0,d3.max(months,m=>m[1])],[H-14,4]);
+  return `<svg class="spark" viewBox="0 0 ${W} ${H}">${months.map(m=>`<rect x="${x(m[0])}" y="${y(m[1])}" width="${x.bandwidth()}" height="${H-14-y(m[1])}" fill="${colr}" opacity=".8"><title>${m[0]}: ${fm(m[1])}</title></rect>`).join("")}
+  <text x="0" y="${H-2}" fill="#7a869e" font-size="9" font-family="JetBrains Mono">${months[0][0]}</text><text x="${W}" y="${H-2}" text-anchor="end" fill="#7a869e" font-size="9" font-family="JetBrains Mono">${months.at(-1)[0]}</text></svg>`;
+}
+const chgCell = g => g.known===false ? `<td class="sub" title="No earlier 13F from this filer in the data">new</td>`
+  : `<td class="${g.chg<0?"neg":"pos"}">${g.chg>0?"+":""}${fn(g.chg)}</td>`;
+const edgarCo = cik => `https://www.sec.gov/cgi-bin/browse-edgar?action=getcompany&CIK=${String(cik).padStart(10,"0")}`;
+function panelCompany(t){
+  const c = CO.get(t); if(!c) return "";
+  const piv = insiderPivot(c), maxP = d3.max(c.groups,g=>g.pct);
+  const ins = peopleByVal.map(p=>({p, x:p.pos.find(x=>x.t===t)})).filter(o=>o.x&&o.x.held>0).sort((a,b)=>b.x.value-a.x.value).slice(0,15);
+  return `
+    <h2 style="color:var(--co)">${c.ticker} <span class="sub" style="font-size:13px">${c.name||""}</span></h2>
+    <div class="sub">$${c.price.toFixed(2)} · mkt cap ≈ ${fm(c.mktCap)} · institutions own ${pc(c.instPct)} · ${fn(c.holderCount)} 13F filers · <a class="ext" href="${edgarCo(c.cik)}" target="_blank" rel="noopener">EDGAR ↗</a></div>
+    ${c.insOn && c.insOn!==c.ticker ? `<div class="sub" style="margin-top:4px">Insiders file once per company: see <a href="#" class="ext" data-t="${c.insOn}">${c.insOn}</a>.</div>` : ""}
+    <div class="sub" style="margin-top:4px">Big 3 own <b style="color:var(--big3)">${pc(c.big3)}</b> · insiders sold <b style="color:var(--sell)">${fm(c.sellVal)}</b>, bought <b style="color:var(--buy)">${fm(c.buyVal)}</b></div>
+    <h3>Insider pivot — open-market, last 18 mo</h3>
+    ${piv.length?`<table><tr><th>Insider</th><th>#</th><th>Shs sold</th><th>$ sold</th><th>$ bought</th><th>Last</th></tr>
+    ${piv.map(([k,v],i)=>`<tr class="click ${i===0&&v.soldV>0?"hot":""}" data-p="${enc(k)}"><td class="pp">${k}<div class="sub" style="font-size:10px">${v.rel}</div></td><td>${v.n}</td><td>${fn(v.sold)}</td><td class="neg">${v.soldV?fm(v.soldV):"–"}</td><td class="pos">${v.bought?fm(v.bought):"–"}</td><td>${v.last.slice(2)}</td></tr>`).join("")}</table>`
+    :"<div class='sub'>No open-market trades in the window.</div>"}
+    <h3>Sells by month</h3>${spark(c.trades)}
+    <h3>Buys by month</h3>${spark(c.trades,"buy")}
+    <h3>What the insiders hold — latest Form 4</h3>
+    ${ins.length?`<table><tr><th>Insider</th><th>Shares</th><th>% of co</th><th>Value</th></tr>
+    ${ins.map(o=>`<tr class="click" data-p="${enc(o.p.name)}"><td class="pp">${o.p.name}<div class="sub" style="font-size:10px">${o.x.rel}</div></td><td>${fn(o.x.held)}</td><td>${pc(o.x.pct)}</td><td>${fm(o.x.value)}</td></tr>`).join("")}</table>`:"<div class='sub'>No holdings reported in the window.</div>"}
+    <h3>Who owns it — top 25 13F filers, grouped by family</h3>
+    <table><tr><th>Holder</th><th>% held</th><th></th><th>Value</th><th>Δ shares</th></tr>
+    ${c.groups.map(g=>`<tr class="click ${BIG3.has(g.name)?"b3":""}" data-h="${enc(g.name)}"><td>${g.name}${g.entities.length>1?` <span class="sub">×${g.entities.length}</span>`:""}</td><td>${pc(g.pct)}</td><td><span class="bar" style="width:${60*g.pct/maxP}px;background:${BIG3.has(g.name)?"var(--big3)":"var(--hold)"}"></span></td><td>${fm(g.value)}</td>${chgCell(g)}</tr>`).join("")}</table>
+    <div class="note">"Sells" = open-market and plan sales only; tax withholding and gifts are left out. Insider holdings = shares on the person's latest Form 4 in the last 18 months. 13F: each filer's newest quarterly report (dates in the holder panel); "Δ shares" = change from that filer's report before.</div>`;
+}
+function panelHolder(name){
+  const h = holders.get(name); if(!h) return "";
+  const st = h.stakes.slice().sort((a,b)=>b.pct-a.pct), mx = d3.max(st,s=>s.pct);
+  return `
+    <h2 style="color:${BIG3.has(name)?"var(--big3)":"var(--hold)"}">${name}</h2>
+    <div class="sub">in top-25 of ${st.length} / ${D.companies.length} companies · ${fm(h.value)} across them</div>
+    <h3>Stakes</h3>
+    <table><tr><th>Ticker</th><th>% held</th><th></th><th>Value</th><th>Δ shares</th></tr>
+    ${st.map(s=>`<tr class="click" data-t="${s.t}"><td class="tk">${s.t}</td><td>${pc(s.pct)}</td><td><span class="bar" style="width:${80*s.pct/mx}px"></span></td><td>${fm(s.value)}</td>${chgCell(s)}</tr>`).join("")}</table>`;
+}
+function panelPerson(name){
+  const p = people.get(name); if(!p) return "";
+  const mx = d3.max(p.pos,x=>x.value)||1;
+  const trades = p.pos.flatMap(x=>x.trades.map(t=>({...t, t:x.t}))).sort((a,b)=>a.date<b.date?1:-1);
+  const open = trades.filter(t=>t.kind!=="other");
+  return `
+    <h2 style="color:var(--person)">${p.name}</h2>
+    <div class="sub">${relOf(p)}</div>
+    ${p.also&&p.also.length?`<div class="sub" style="margin-top:4px">Joint filers, same shares (counted once): ${[...new Set(p.also)].join(", ")}</div>`:""}
+    <div class="sub" style="margin-top:4px">holds ≈ <b style="color:var(--person)">${fm(p.value)}</b> in ${p.pos.length} tracked compan${p.pos.length>1?"ies":"y"} · sold <b style="color:var(--sell)">${fm(p.sold)}</b> · bought <b style="color:var(--buy)">${fm(p.bought)}</b> (18 mo)</div>
+    <h3>Holdings — latest Form 4</h3>
+    <table><tr><th>Ticker</th><th>Shares</th><th>% of co</th><th></th><th>Value</th></tr>
+    ${p.pos.map(x=>`<tr class="click" data-t="${x.t}"><td class="tk">${x.t}<div class="sub" style="font-size:10px">${x.rel}</div></td><td>${fn(x.held)}<div class="sub" style="font-size:10px">${x.indirect?`D ${fn(x.direct)} · I ${fn(x.indirect)}`:"direct"}</div></td><td>${pc(x.pct)}</td><td><span class="bar" style="width:${60*x.value/mx}px;background:var(--person)"></span></td><td>${fm(x.value)}</td></tr>`).join("")}</table>
+    <h3>Sells by month</h3>${spark(trades)}
+    <h3>Open-market trades · 18 mo</h3>
+    ${open.length?`<table><tr><th>Date</th><th>Ticker</th><th>Type</th><th>Shares</th><th>Price</th><th>Value</th></tr>
+    ${open.slice(0,40).map(t=>`<tr><td>${t.date}</td><td class="tk">${t.t}</td><td class="${t.kind==="sell"?"neg":"pos"}">${t.type}</td><td>${fn(t.shares)}</td><td ${t.est?'title="Price in the filing looks wrong; valued at the current price"':""}>${t.price?(t.est?"≈":"")+"$"+t.price.toFixed(2):"–"}</td><td>${t.est?"≈":""}${fm(t.value)}</td></tr>`).join("")}</table>`:"<div class='sub'>No open-market trades — grants, awards and tax withholding only.</div>"}
+    ${p.url?`<p><a class="ext" href="${p.url}" target="_blank" rel="noopener">All Form 4 filings on SEC EDGAR ↗</a></p>`:""}
+    <div class="note">Shares = the "shares owned following" on the person's latest Form 4 line for each account at each company (D = direct, I = indirect: trusts, family, LLCs; each named indirect account counts once). It covers only the ${D.companies.length} tracked companies and only people with a filing in the last 18 months. It includes restricted (unvested) stock when the filer reports it as held, so it can be well above the vested stake (e.g. the Musk 2025 award). Options are not counted. An account that was closed but not reported as zero keeps its last value, so a total can be high.</div>`;
+}
+
+// ---- views
+const svg = d3.select("#svg"), tip = $("#tip");
+let sim, focusNode = ()=>{}, zoomB = null;
+function size(){ const r=$("#stage").getBoundingClientRect(); return [Math.max(300, r.width||window.innerWidth-440), Math.max(300, r.height||window.innerHeight-60)]; }
+function resetZoom(){ if(zoomB && view==="net") svg.transition().duration(500).call(zoomB.transform, d3.zoomIdentity); }
+function clearStage(){ svg.selectAll("*").remove(); svg.on(".zoom",null).on("click",null); if(sim) sim.stop(); focusNode=()=>{}; zoomB=null; }
+
+// run a force on a subset of nodes only (insiders must not feel the big company push)
+function only(force, keep){ const f = a => force(a); f.initialize = (ns, ...r) => force.initialize(ns.filter(keep), ...r); return f; }
+
+function drawNet(){
+  clearStage();
+  const minDeg = +$("#minDeg").value, topN = Math.max(5, +$("#topN").value||40);
+  const cos = COS().slice(0, topN);
+  if(cur.kind==="company" && !cos.some(c=>c.ticker===cur.arg)) cos.push(CO.get(cur.arg));  // keep the selected one
+  const shown = new Set(cos.map(c=>c.ticker));
+  const hs = [...holders.values()].map(h=>{ const st = h.stakes.filter(s=>shown.has(s.t));
+      return {name:h.name, stakes:st, value:d3.sum(st,s=>s.value)}; }).filter(h=>h.stakes.length>=minDeg);
+  const ps = $("#showPeople").checked ? peopleByVal.map(p=>({...p, pos:p.pos.filter(x=>shown.has(x.t))})).filter(p=>p.pos.length)
+      .sort((a,b)=>d3.sum(b.pos,x=>x.value)-d3.sum(a.pos,x=>x.value)).slice(0,40) : [];
+  $("#sHold").textContent = hs.length;
+  const [W,H] = size();
+  svg.attr("viewBox",[-W/2,-H/2,W,H]);  // origin = centre, so a resize keeps the web centred
+  const rC = d3.scaleSqrt([0,d3.max(cos,c=>c.mktCap)],[6,38]);
+  const rH = d3.scaleSqrt([0,d3.max(hs,h=>h.value)],[3,46]);
+  const rP = d3.scaleSqrt([0,d3.max(ps,p=>p.pos[0].value)||1],[3,26]);
+  const maxSell = d3.max(cos,c=>c.sellVal)||1;
+  const nodes = [
+    ...cos.map(c=>({id:"c:"+c.ticker, kind:"c", label:c.ticker, r:rC(c.mktCap), c})),
+    ...hs.map(h=>({id:"h:"+h.name, kind:"h", label:h.name, r:rH(h.value), h, big:BIG3.has(h.name)})),
+    ...ps.map(p=>({id:"p:"+p.name, kind:"p", label:p.name, r:rP(p.pos[0].value), p}))];
+  const ids = new Set(nodes.map(n=>n.id)), byId = new Map(nodes.map(n=>[n.id,n]));
+  const links = [];
+  hs.forEach(h=>h.stakes.forEach(s=>{ if(ids.has("c:"+s.t)) links.push({source:"h:"+h.name, target:"c:"+s.t, pct:s.pct, value:s.value, big:BIG3.has(h.name)}); }));
+  ps.forEach(p=>p.pos.forEach(x=>links.push({source:"p:"+p.name, target:"c:"+x.t, pct:Math.min(8,Math.max(.5,x.pct*4)), value:x.value, person:true})));
+  const wL = d3.scaleSqrt([0,d3.max(links,l=>l.pct)],[.3,6]);
+  const baseOp = l => l.big?.35:l.person?.5:.18;
+
+  const g = svg.append("g");
+  zoomB = d3.zoom().scaleExtent([.3,5]).on("zoom",e=>g.attr("transform",e.transform));
+  svg.call(zoomB);
+  const defs = svg.append("defs"), glow = defs.append("filter").attr("id","glow");
+  glow.append("feGaussianBlur").attr("stdDeviation",3.5).attr("result","b");
+  const fmg = glow.append("feMerge"); fmg.append("feMergeNode").attr("in","b"); fmg.append("feMergeNode").attr("in","SourceGraphic");
+
+  const link = g.append("g").selectAll("line").data(links).join("line")
+    .attr("stroke",d=>d.big?"#ff4d8d":d.person?"#ffc94d":"#8f6bff").attr("stroke-opacity",baseOp)
+    .attr("stroke-dasharray",d=>d.person?"4 3":null).attr("stroke-width",d=>wL(d.pct));
+  const node = g.append("g").selectAll("g").data(nodes).join("g").style("cursor","pointer");
+  node.filter(d=>d.kind==="c"&&d.c.sellVal>0).append("circle").attr("class","ring")
+    .attr("r",d=>d.r+3+8*Math.sqrt(d.c.sellVal/maxSell)).attr("fill","none").attr("stroke","var(--sell)")
+    .attr("stroke-width",d=>1+3*Math.sqrt(d.c.sellVal/maxSell)).attr("stroke-opacity",.7);
+  const maxBuy = d3.max(cos,c=>c.buyVal)||1;
+  node.filter(d=>d.kind==="c"&&d.c.buyVal>0).append("circle").attr("class","bring")
+    .attr("r",d=>d.r+2).attr("fill","none").attr("stroke","var(--buy)").attr("stroke-dasharray","3 3")
+    .attr("stroke-width",d=>1.2+3*Math.sqrt(d.c.buyVal/maxBuy)).attr("stroke-opacity",.9);
+  node.append("circle").attr("r",d=>d.r)
+    .attr("fill",d=>d.kind==="c"?"#0b2b2a":d.kind==="p"?"#2e2508":d.big?"#3a0f22":"#1d1640")
+    .attr("stroke",d=>d.kind==="c"?"var(--co)":d.kind==="p"?"var(--person)":d.big?"var(--big3)":"var(--hold)").attr("stroke-width",1.6)
+    .attr("filter",d=>d.kind==="c"||d.big?"url(#glow)":null);
+  const showLbl = n => n.kind==="c"||n.big||n.r>9;
+  node.append("text").text(d=>d.label).attr("text-anchor","middle")
+    .attr("dy",d=>d.kind==="c"||(d.kind==="h"&&d.r>16)?4:d.r+11)
+    .attr("font-family","JetBrains Mono").attr("font-size",d=>d.kind==="c"?Math.max(9,d.r/2.6):d.kind==="h"&&d.r>16?Math.max(9,d.r/3.4):9)
+    .attr("font-weight",d=>d.kind==="c"?600:400)
+    .attr("fill",d=>d.kind==="c"?"var(--co)":d.kind==="p"?"var(--person)":d.big?"var(--big3)":"#a99cff")
+    .attr("opacity",d=>showLbl(d)?1:0).attr("pointer-events","none");
+
+  const nb = new Map(nodes.map(n=>[n.id,new Set([n.id])]));
+  links.forEach(l=>{ nb.get(l.source).add(l.target); nb.get(l.target).add(l.source); });
+  let pinned=null;
+  function hi(d){
+    const s = d?nb.get(d.id):null;
+    node.attr("opacity",n=>!s||s.has(n.id)?1:.12);
+    node.selectAll("text").attr("opacity",n=>s?(s.has(n.id)?1:0):(showLbl(n)?1:0));
+    link.attr("stroke-opacity",l=>!s?baseOp(l):(l.source.id===d.id||l.target.id===d.id?.9:.03));
+  }
+  node.on("mouseenter",(e,d)=>{ if(!pinned) hi(d);
+      tip.style.opacity=1;
+      tip.innerHTML = d.kind==="c"
+        ? `<b style="color:var(--co)">${d.label}</b><br>mkt cap ≈ ${fm(d.c.mktCap)}<br>Big 3: ${pc(d.c.big3)}<br>insider sells: <span class="neg">${fm(d.c.sellVal)}</span><br>insider buys: <span class="pos">${fm(d.c.buyVal)}</span>`
+        : d.kind==="p" ? `<b style="color:var(--person)">${d.label}</b><br>${relOf(d.p)}<br>holds ≈ ${fm(d.p.value)}<br>sold ${fm(d.p.sold)} · bought ${fm(d.p.bought)}`
+        : `<b style="color:${d.big?"var(--big3)":"var(--hold)"}">${d.label}</b><br>in ${d.h.stakes.length} companies<br>${fm(d.h.value)} held`;
+    })
+    .on("mousemove",e=>{ const r=$("#stage").getBoundingClientRect(); tip.style.left=(e.clientX-r.left+14)+"px"; tip.style.top=(e.clientY-r.top+10)+"px"; })
+    .on("mouseleave",()=>{ tip.style.opacity=0; if(!pinned) hi(null); })
+    .on("click",(e,d)=>{ e.stopPropagation(); go(d.kind==="c"?"company":d.kind==="p"?"person":"holder", d.label); });
+  svg.on("click",()=>home());
+  focusNode = id => { const d = id && nodes.find(n=>n.id===id); pinned = d||null; hi(pinned); };
+
+  node.call(d3.drag()
+    .on("start",(e,d)=>{ if(!e.active) sim.alphaTarget(.25).restart(); d.fx=d.x; d.fy=d.y; })
+    .on("drag",(e,d)=>{ d.fx=e.x; d.fy=e.y; })
+    .on("end",(e,d)=>{ if(!e.active) sim.alphaTarget(0); d.fx=null; d.fy=null; }));
+
+  sim = d3.forceSimulation(nodes)
+    .force("link", d3.forceLink(links).id(d=>d.id).distance(l=>l.person?60+l.target.r:110+90*(1-Math.min(1,l.pct/8))).strength(l=>l.person?.5:.08+.03*Math.min(l.pct,8)))
+    .force("charge", only(d3.forceManyBody().strength(d=>d.kind==="c"?-1100:d.big?-1500:-260), n=>n.kind!=="p"))
+    .force("pcharge", only(d3.forceManyBody().strength(-40).distanceMax(120), n=>n.kind==="p"))
+    .force("collide", d3.forceCollide(d=>d.r+(d.kind==="c"?14:5)))
+    .force("x", d3.forceX(0).strength(.04)).force("y", d3.forceY(0).strength(.05))
+    .force("anchor", alpha => {  // keep each insider in orbit of their biggest company
+      nodes.forEach(n => { if(n.kind!=="p") return; const c = byId.get("c:"+n.p.pos[0].t); if(!c) return;
+        const dx=c.x-n.x, dy=c.y-n.y, d=Math.hypot(dx,dy)||1, want=c.r+n.r+18, k=.35*alpha*(d-want)/d;
+        n.vx += dx*k; n.vy += dy*k; });
+    })
+    .on("tick",()=>{
+      link.attr("x1",d=>d.source.x).attr("y1",d=>d.source.y).attr("x2",d=>d.target.x).attr("y2",d=>d.target.y);
+      node.attr("transform",d=>`translate(${d.x},${d.y})`);
+    });
+  // slow pulse on the sell rings
+  node.selectAll("circle.ring").each(function(){ const el=d3.select(this), r0=+el.attr("r");
+    (function loop(){ el.transition().duration(1400).attr("r",r0+5).attr("stroke-opacity",.15).transition().duration(1400).attr("r",r0).attr("stroke-opacity",.7).on("end",loop); })(); });
+  focusNode(cur.kind==="company"?"c:"+cur.arg : cur.kind==="holder"?"h:"+cur.arg : cur.kind==="person"?"p:"+cur.arg : null);
+}
+
+function drawBig3(){
+  clearStage(); svg.attr("viewBox",null);
+  const [W,H] = size(), m={t:40,r:30,b:30,l:70};
+  const names = ["Vanguard Group","BlackRock","State Street"], col={"Vanguard Group":"#ff4d8d","BlackRock":"#c44dff","State Street":"#ff9b4d"};
+  const rows = COS().map(c=>({t:c.ticker, ...Object.fromEntries(names.map(n=>[n,(c.groups.find(g=>g.name===n)||{pct:0}).pct])), tot:c.big3}))
+    .sort((a,b)=>b.tot-a.tot).slice(0, Math.max(10, Math.floor((H-m.t-m.b)/15)));
+  const y = d3.scaleBand(rows.map(r=>r.t),[m.t,H-m.b]).padding(.25), x = d3.scaleLinear([0,d3.max(rows,r=>r.tot)*1.1],[m.l,W-m.r]);
+  const stack = d3.stack().keys(names)(rows);
+  svg.append("g").selectAll("g").data(stack).join("g").attr("fill",s=>col[s.key])
+    .selectAll("rect").data(s=>s).join("rect").attr("y",d=>y(d.data.t)).attr("height",y.bandwidth())
+    .attr("x",x(0)).attr("width",0).style("cursor","pointer").on("click",(e,d)=>{ e.stopPropagation(); go("company",d.data.t); })
+    .transition().duration(900).delay((d,i)=>i*25).attr("x",d=>x(d[0])).attr("width",d=>x(d[1])-x(d[0]));
+  svg.append("g").selectAll("text").data(rows).join("text").attr("x",m.l-8).attr("y",d=>y(d.t)+y.bandwidth()/2+4)
+    .attr("text-anchor","end").attr("fill","var(--co)").attr("font-family","JetBrains Mono").attr("font-size",11).text(d=>d.t);
+  svg.append("g").selectAll("text").data(rows).join("text").attr("x",d=>x(d.tot)+6).attr("y",d=>y(d.t)+y.bandwidth()/2+4)
+    .attr("fill","var(--ink)").attr("font-family","JetBrains Mono").attr("font-size",10).text(d=>pc(d.tot));
+  const lg = svg.append("g").attr("transform",`translate(${m.l},18)`);
+  names.forEach((n,i)=>{ lg.append("rect").attr("x",i*150).attr("y",-9).attr("width",10).attr("height",10).attr("fill",col[n]);
+    lg.append("text").attr("x",i*150+16).attr("y",0).attr("fill","var(--dim)").attr("font-family","JetBrains Mono").attr("font-size",11).text(n); });
+  svg.on("click",()=>home());
+}
+
+// generic horizontal bar board: rows = [{who, tags, v, label}], click -> person
+function drawBars(rows, colr, empty){
+  clearStage(); svg.attr("viewBox",null);
+  const [W,H] = size(), m={t:20,r:120,b:30,l:260};
+  const top = rows.slice(0,Math.floor((H-m.t-m.b)/19));
+  if(!top.length){ svg.append("text").attr("x",40).attr("y",60).attr("fill","var(--dim)").text(empty); return; }
+  const y = d3.scaleBand(top.map((d,i)=>i),[m.t,H-m.b]).padding(.2), x = d3.scaleSqrt([0,top[0].v],[m.l,W-m.r]);
+  const g = svg.append("g").selectAll("g").data(top).join("g").style("cursor","pointer").on("click",(e,d)=>{ e.stopPropagation(); go("person",d.who); });
+  g.append("rect").attr("x",m.l).attr("y",(d,i)=>y(i)).attr("height",y.bandwidth()).attr("fill",colr).attr("opacity",.75).attr("width",0)
+    .transition().duration(900).delay((d,i)=>i*20).attr("width",d=>x(d.v)-m.l);
+  g.append("text").attr("x",m.l-8).attr("y",(d,i)=>y(i)+y.bandwidth()/2+4).attr("text-anchor","end").attr("font-family","JetBrains Mono").attr("font-size",11)
+    .html(d=>`<tspan fill="var(--ink)">${d.who}</tspan> <tspan fill="var(--co)">${d.tags}</tspan>`);
+  g.append("text").attr("x",d=>x(d.v)+6).attr("y",(d,i)=>y(i)+y.bandwidth()/2+4).attr("fill","var(--dim)").attr("font-family","JetBrains Mono").attr("font-size",10)
+    .text(d=>d.label);
+  svg.on("click",()=>home());
+}
+function drawBoard(kind){
+  const rows = [];
+  people.forEach(p=>posIn(p).forEach(x=>{ const v = kind==="sell"?x.sold:x.bought; if(v>0) rows.push({who:p.name, tags:x.t, v, label:`${fm(v)} · ${x.trades.filter(t=>t.kind===kind).length}×`}); }));
+  drawBars(rows.sort((a,b)=>b.v-a.v), kind==="sell"?"var(--sell)":"var(--buy)", `No open-market ${kind}s in the window.`);
+}
+function drawPeople(){
+  drawBars(peopleByVal.map(p=>({p, pos:posIn(p).filter(x=>x.value>0)})).filter(o=>o.pos.length).map(({p,pos})=>({who:p.name, tags:pos.map(x=>x.t).join(" "), v:d3.sum(pos,x=>x.value), label:`${fm(d3.sum(pos,x=>x.value))} · ${pos[0].rel}`}))
+    .sort((a,b)=>b.v-a.v), "var(--person)", "No holdings.");
+}
+
+let view="net";
+const draw = () => { document.querySelectorAll(".legend,.hint").forEach(e=>e.style.display=view==="net"?"":"none");
+  ({net:drawNet, big3:drawBig3, people:drawPeople, sells:()=>drawBoard("sell"), buys:()=>drawBoard("buy")})[view](); };
+document.querySelectorAll(".tabs button").forEach(b=>b.onclick=()=>{ document.querySelectorAll(".tabs button").forEach(x=>x.classList.toggle("on",x===b)); view=b.dataset.v; draw(); });
+$("#minDeg").onchange = $("#topN").onchange = ()=>{ if(view==="net") drawNet(); };
+$("#idx").onchange = e=>{ IDX = e.target.value; stats(); draw(); render(); };
+$("#showPeople").onchange = ()=>{ if(view==="net") drawNet(); };
+$("#reset").onclick = home;
+document.addEventListener("keydown", e=>{ if(e.key==="Escape") home(); if(e.key==="Backspace" && !/INPUT|TEXTAREA|SELECT/.test(document.activeElement.tagName)) { e.preventDefault(); back(); } });
+let rt; window.addEventListener("resize",()=>{ clearTimeout(rt); rt=setTimeout(draw,200); });
+draw(); render();
+</script>
+</body>
+</html>

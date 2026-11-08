@@ -1,0 +1,24 @@
+"""Serve Money Master on localhost with caching off.
+
+The plain `python -m http.server` sends no cache headers, so the browser can
+keep an old index.html after an update. This server says "no-store".
+
+Usage: python money_master/serve.py [port]
+"""
+import functools
+import http.server
+import sys
+from pathlib import Path
+
+
+class NoCache(http.server.SimpleHTTPRequestHandler):
+    def end_headers(self):
+        self.send_header("Cache-Control", "no-store")
+        super().end_headers()
+
+
+if __name__ == "__main__":
+    port = int(sys.argv[1]) if len(sys.argv) > 1 else 8561
+    handler = functools.partial(NoCache, directory=str(Path(__file__).resolve().parent))
+    print(f"Money Master on http://localhost:{port}/")
+    http.server.ThreadingHTTPServer(("127.0.0.1", port), handler).serve_forever()
